@@ -11,7 +11,7 @@ interface PageProps {
 
 async function getQuestion(id: string): Promise<Question | null> {
     try {
-        const res = await fetch(`http://localhost:5000/api/admin/questions/${id}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/questions/${id}`, {
             cache: 'no-store',
             headers: { 'Content-Type': 'application/json' }
         });

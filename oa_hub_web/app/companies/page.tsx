@@ -20,7 +20,7 @@ interface Company {
 
 async function getCompanies(): Promise<Company[]> {
     try {
-        const res = await fetch('http://localhost:5000/api/companies', { cache: 'no-store' });
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies`, { cache: 'no-store' });
         if (!res.ok) return [];
         return res.json();
     } catch (error) {

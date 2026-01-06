@@ -46,7 +46,7 @@ interface CompanyData {
 
 async function getCompanyData(slug: string): Promise<CompanyData | null> {
     try {
-        const res = await fetch(`http://localhost:5000/api/companies/${slug}`, { cache: 'no-store' });
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${slug}`, { cache: 'no-store' });
         if (!res.ok) return null;
         return res.json();
     } catch (error) {

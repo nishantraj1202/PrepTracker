@@ -13,7 +13,7 @@ interface PageProps {
 
 async function getQuestion(slug: string): Promise<Question | null> {
     try {
-        const res = await fetch(`http://localhost:5000/api/questions/${slug}`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions/${slug}`, {
             cache: 'no-store'
         });
         if (!res.ok) return null;

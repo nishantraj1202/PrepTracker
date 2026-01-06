@@ -13,7 +13,7 @@ interface PageProps {
 
 async function getQuestionsByDifficulty(difficulty: string): Promise<Question[]> {
     try {
-        const res = await fetch(`http://localhost:5000/api/questions?difficulty=${difficulty}`, { cache: 'no-store' });
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions?difficulty=${difficulty}`, { cache: 'no-store' });
         if (!res.ok) return [];
         return res.json();
     } catch (error) {

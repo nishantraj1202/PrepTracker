@@ -13,7 +13,7 @@ interface PageProps {
 
 async function getQuestionsByTopic(topic: string): Promise<Question[]> {
     try {
-        const res = await fetch(`http://localhost:5000/api/questions?topic=${topic}`, { cache: 'no-store' });
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions?topic=${topic}`, { cache: 'no-store' });
         if (!res.ok) return [];
         return res.json();
     } catch (error) {

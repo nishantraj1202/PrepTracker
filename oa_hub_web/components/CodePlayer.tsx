@@ -112,7 +112,7 @@ export function CodePlayer({ question }: CodePlayerProps) {
         setLastRunMode(activeTab);
 
         try {
-            const response = await fetch('http://localhost:5000/api/execute', {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/execute`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
