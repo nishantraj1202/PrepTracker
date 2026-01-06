@@ -12,6 +12,7 @@ export type Question = {
     views: string;
     duration: string;
     img: string;
+    images?: string[];
     date?: string;
     desc: string;
     constraints?: string;

@@ -198,7 +198,7 @@ export function CodePlayer({ question }: CodePlayerProps) {
                     <h3 className="font-bold text-white mb-4 text-2xl">{question.title}</h3>
 
                     {/* Display Screenshots if available */}
-                    {question.images && question.images.length > 0 && (
+                    {question?.images && question.images.length > 0 && (
                         <div className="mb-6 grid grid-cols-1 gap-4">
                             {question.images.map((img, idx) => (
                                 <div key={idx} className="relative w-full border border-dark-600 rounded-lg overflow-hidden bg-dark-900 group">
