@@ -198,6 +198,71 @@ export default function AdminPage() {
 
 
 
+    // --- Auth State ---
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [passwordInput, setPasswordInput] = useState("");
+    const [authError, setAuthError] = useState(false);
+
+    // SHA-256 Hash of "admin"
+    // To change password, generate a new SHA-256 hash
+    const ADMIN_HASH = "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918";
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const encoder = new TextEncoder();
+        const data = encoder.encode(passwordInput);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        if (hashHex === ADMIN_HASH) {
+            setIsAuthenticated(true);
+            setAuthError(false);
+        } else {
+            setAuthError(true);
+        }
+    };
+
+    if (!isAuthenticated) {
+        return (
+            <div className="flex flex-col h-screen overflow-hidden bg-dark-950 text-gray-200">
+                <Navbar />
+                <div className="flex-1 flex items-center justify-center p-4">
+                    <div className="bg-dark-900 border border-dark-800 p-8 rounded-lg max-w-md w-full shadow-2xl">
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-dark-800 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                                🔒
+                            </div>
+                            <h1 className="text-2xl font-bold text-white">Admin Access</h1>
+                            <p className="text-gray-400 text-sm mt-2">Enter the secret key to continue</p>
+                        </div>
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <div>
+                                <input
+                                    type="password"
+                                    value={passwordInput}
+                                    onChange={(e) => setPasswordInput(e.target.value)}
+                                    placeholder="Secret Key"
+                                    className="w-full bg-black border border-dark-700 rounded px-4 py-3 text-white focus:border-brand focus:outline-none transition-colors"
+                                    autoFocus
+                                />
+                            </div>
+                            {authError && (
+                                <p className="text-red-500 text-sm text-center">Invalid secret key</p>
+                            )}
+                            <button
+                                type="submit"
+                                className="w-full bg-brand hover:bg-yellow-500 text-black font-bold py-3 rounded transition-colors"
+                            >
+                                Unlock Panel
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col h-screen overflow-hidden bg-dark-950 text-gray-200">
             <Navbar />
