@@ -55,7 +55,7 @@ export default function ContributePage() {
     const directSubmit = async (data: any) => {
         setLoading(true);
         try {
-            const res = await fetch('http://127.0.0.1:5000/api/questions', {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
