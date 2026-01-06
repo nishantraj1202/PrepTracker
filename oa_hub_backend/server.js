@@ -18,11 +18,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors(
     {
-        origin: "http://localhost:3000",
-        credentials: true
-    },
-    {
-        origin: "https://prep-tracker-12.vercel.app",
+        origin: ["http://localhost:3000", "https://prep-tracker-12.vercel.app"],
         credentials: true
     }
 ));
