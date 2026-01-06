@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # Backend Node.js Service
+  backend:
+    build: .
+    container_name: oa_hub_backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      # Use 'mongo' as hostname (service name) which matches the link below
+      - MONGO_URI=mongodb://mongo:27017/oa_hub
+      # Pass through other env vars if needed, or use env_file
+    env_file:
+      - .env
+    depends_on:
+      - mongo
+    restart: always
+    volumes:
+       # Mount code for hot reloading (optional, good for dev)
+       - ./:/app
+       - /app/node_modules
+
+  # MongoDB Service
+  mongo:
+    image: mongo:latest
+    container_name: oa_hub_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: always
+
+volumes:
+  mongo_data:
