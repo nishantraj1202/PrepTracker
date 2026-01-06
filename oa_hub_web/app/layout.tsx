@@ -15,6 +15,23 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "PrepTracker - Premium OA Hub",
   description: "The ultimate platform for tracking and practicing OA questions.",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://preptracker.example.com",
+    siteName: "PrepTracker",
+    images: [{
+      url: "/og-image.png", // Verify if this exists later or use a placeholder
+      width: 1200,
+      height: 630,
+      alt: "PrepTracker"
+    }]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PrepTracker - Premium OA Hub",
+    description: "The ultimate platform for tracking and practicing OA questions.",
+  }
 };
 
 export default function RootLayout({

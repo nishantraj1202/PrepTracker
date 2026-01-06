@@ -3,6 +3,12 @@ import { Navbar } from "@/components/Navbar";
 import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link";
 import { ArrowRight, Code, Terminal, Zap } from "lucide-react";
+import { type Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "PrepTracker - Crack Your OA Interview",
+  description: "The ultimate guide to cracking online assessments. Practice real questions from top companies like Google, Amazon, and Microsoft.",
+};
 
 export default function Home() {
   return (
