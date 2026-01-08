@@ -25,6 +25,7 @@ export default function AdminPage() {
     const [aiError, setAiError] = useState<string | null>(null);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+    const [deletedImages, setDeletedImages] = useState<string[]>([]);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // --- Review Panel State ---
@@ -70,33 +71,15 @@ export default function AdminPage() {
         }
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-
+    // --- Helper: Run AI Extraction ---
+    const runAiExtraction = async (imageData: string[]) => {
         setAiLoading(true);
         setAiError(null);
-        setImagePreviews([]);
-
         try {
-            // Read all files as Base64
-            const promises = Array.from(files).map(file => {
-                return new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-            });
-
-            const base64Images = await Promise.all(promises);
-            setImagePreviews(base64Images);
-
-            // Send to AI
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/extract/image`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ images: base64Images })
+                body: JSON.stringify({ images: imageData })
             });
 
             const data = await res.json();
@@ -121,6 +104,36 @@ export default function AdminPage() {
         }
     };
 
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        setImagePreviews([]);
+        setDeletedImages([]);
+
+        try {
+            // Read all files as Base64
+            const promises = Array.from(files).map(file => {
+                return new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            });
+
+            const base64Images = await Promise.all(promises);
+            setImagePreviews(base64Images);
+
+            // Trigger AI
+            await runAiExtraction(base64Images);
+
+        } catch (error: any) {
+            console.error(error);
+            setAiError("Failed to read image files");
+        }
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
@@ -139,6 +152,22 @@ export default function AdminPage() {
             testCases: JSON.stringify(q.testCases || [], null, 2)
         });
         setEditingId(q.id);
+        setDeletedImages([]); // Reset deleted tracker
+
+        // Auto-Show Previews if existing images
+        if (q.images && q.images.length > 0) {
+            setImagePreviews(q.images);
+
+            // AUTO-EXTRACT: If description is generic placeholder, try to re-extract
+            const isGenericDesc = !q.desc || q.desc.includes("See attached screenshots");
+            if (isGenericDesc) {
+                console.log("Auto-extracting from existing images...");
+                runAiExtraction(q.images);
+            }
+        } else {
+            setImagePreviews([]);
+        }
+
         setActiveTab("post");
     };
 
@@ -160,7 +189,9 @@ export default function AdminPage() {
 
             const payload = {
                 ...formData,
-                testCases: parsedTestCases
+                testCases: parsedTestCases,
+                images: imagePreviews, // Explicitly save current images (or empty array)
+                deletedImages: deletedImages // Send tracking of deleted images
             };
 
             let url = `${process.env.NEXT_PUBLIC_API_URL}/questions`;
@@ -313,6 +344,7 @@ export default function AdminPage() {
                                         onChange={handleImageUpload}
                                     />
                                     <button
+                                        type="button"
                                         onClick={() => fileInputRef.current?.click()}
                                         disabled={aiLoading}
                                         className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
@@ -323,10 +355,40 @@ export default function AdminPage() {
 
                                 {/* Image Previews */}
                                 {imagePreviews.length > 0 && (
-                                    <div className="flex gap-2 overflow-x-auto mb-6 p-2 bg-dark-900 rounded border border-dark-700">
-                                        {imagePreviews.map((src, i) => (
-                                            <img key={i} src={src} alt={`Preview ${i}`} className="h-24 w-auto rounded border border-dark-600" />
-                                        ))}
+                                    <div className="mb-6">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-gray-400 text-sm">Attached Images ({imagePreviews.length})</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setImagePreviews([])}
+                                                className="text-red-400 text-xs hover:text-red-300 underline"
+                                            >
+                                                Remove All Images
+                                            </button>
+                                        </div>
+                                        <div className="flex gap-2 overflow-x-auto p-2 bg-dark-900 rounded border border-dark-700">
+                                            {imagePreviews.map((src, i) => (
+                                                <div key={i} className="relative group flex-shrink-0">
+                                                    <img src={src} alt={`Preview ${i}`} className="h-32 w-auto rounded border border-dark-600" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const toDelete = imagePreviews[i];
+                                                            // Track deleted image for backend cleanup
+                                                            setDeletedImages(prev => [...prev, toDelete]);
+
+                                                            const newImages = [...imagePreviews];
+                                                            newImages.splice(i, 1);
+                                                            setImagePreviews(newImages);
+                                                        }}
+                                                        className="absolute top-1 right-1 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                                                        title="Remove this image"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
 

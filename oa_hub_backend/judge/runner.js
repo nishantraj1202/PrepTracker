@@ -1,110 +1,146 @@
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const crypto = require('crypto');
 
-const TEMP_DIR = path.join(__dirname, 'temp');
+// Use a local temp directory or strict system temp
+const TEMP_DIR = path.join(__dirname, 'temp_jobs');
 
-// Ensure temp dir exists
 if (!fs.existsSync(TEMP_DIR)) {
-    fs.mkdirSync(TEMP_DIR);
+    fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
-const IMAGES = {
-    cpp: 'judge-cpp',
-    python: 'judge-python',
-    java: 'judge-java',
-    javascript: 'node:20.10.0-alpine' // Use standard Node alpine image
+const TIMEOUT_MS = 5000; // 5 Seconds execution timeout
+
+const CONFIG = {
+    cpp: {
+        image: 'judge-cpp',
+        filename: 'Main.cpp',
+        cmd: ['bash', '-c', 'g++ Main.cpp -o main && ./main']
+    },
+    python: {
+        image: 'judge-python',
+        filename: 'Main.py',
+        cmd: ['python3', 'Main.py']
+    },
+    java: {
+        image: 'judge-java',
+        filename: 'Main.java',
+        cmd: ['bash', '-c', 'javac Main.java && java Main']
+    },
+    javascript: {
+        image: 'node:20-alpine',
+        filename: 'Main.js',
+        cmd: ['node', 'Main.js']
+    }
 };
 
-const FILE_NAMES = {
-    cpp: 'Main.cpp',
-    python: 'Main.py',
-    java: 'Main.java',
-    javascript: 'Main.js'
-};
-
-const CMD_TIMEOUT = 10000; // 10s max for container life
-
+/**
+ * Runs code in a secure Docker container.
+ * @param {string} language - cpp, python, java, javascript
+ * @param {string} code - Source code
+ * @param {string} input - Raw Raw STDIN input
+ * @returns {Promise<{stdout: string, stderr: string, status: string}>}
+ */
 function runCode(language, code, input) {
-    return new Promise((resolve, reject) => {
-        // Validation
-        if (!IMAGES[language]) {
-            return reject(new Error(`Language ${language} not supported`));
+    return new Promise((resolve) => {
+        const config = CONFIG[language];
+        if (!config) {
+            return resolve({ stdout: "", stderr: "Language not supported", status: "RE" });
         }
 
-        const jobId = Date.now() + Math.random().toString(36).substring(7);
+        const jobId = crypto.randomUUID();
         const jobDir = path.join(TEMP_DIR, jobId);
 
+        // 1. Setup Environment
         try {
-            // Create job-specific directory
-            fs.mkdirSync(jobDir);
+            fs.mkdirSync(jobDir, { recursive: true });
+            fs.writeFileSync(path.join(jobDir, config.filename), code);
+        } catch (err) {
+            return resolve({ stdout: "", stderr: "System Error: " + err.message, status: "RE" });
+        }
 
-            const fileName = FILE_NAMES[language];
-            const codePath = path.join(jobDir, fileName);
-            const inputPath = path.join(jobDir, 'input.txt');
+        // 2. Prepare Docker Args
+        // Network none, limit memory, auto-remove, mount volume
+        const args = [
+            'run', '--rm',
+            '--network', 'none',
+            '--memory=256m',
+            '--cpus=0.5',
+            '-v', `${jobDir}:/app`,
+            '-w', '/app',
+            '-i', // Interactive (Keep STDIN open)
+            config.image,
+            ...config.cmd
+        ];
 
-            fs.writeFileSync(codePath, code);
-            fs.writeFileSync(inputPath, input || "");
+        // 3. Spawn
+        const child = spawn('docker', args);
 
-            // Docker command
-            // On Windows, $(pwd) in git bash maps to path, but here we use node path
-            // We need absolute path for volume mount
-            const workDir = jobDir;
+        let stdout = "";
+        let stderr = "";
+        let killed = false;
 
-            // Adjust memory/cpu as needed
-            // Note: --network none is CRITICAL
-            const image = IMAGES[language];
-            let runCmd = '';
+        // 4. Timeout Handling
+        const timer = setTimeout(() => {
+            killed = true;
+            child.kill(); // SIGTERM
+            // Force kill if stuck
+            setTimeout(() => { if (!child.killed) child.kill('SIGKILL'); }, 500);
+        }, TIMEOUT_MS);
 
-            // This relies on the Entrypoint of your custom images.
-            // But for standard Node image, we need to specify "node Main.js"
-            if (language === 'javascript') {
-                runCmd = `docker run --rm --network none --memory="256m" --cpus="0.5" -v "${workDir}:/app" -w /app ${image} node Main.js`;
-            } else {
-                // For my custom images (judge-cpp, etc.), they might have ENTRYPOINT scripts that compile and run.
-                // Assuming they are set up to run automatically
-                runCmd = `docker run --rm --network none --memory="256m" --cpus="0.5" -v "${workDir}:/app" ${image}`;
+        // 5. Handle I/O
+        child.stdout.on('data', (data) => {
+            if (stdout.length < 50000) stdout += data.toString(); // Limit output size
+        });
+
+        child.stderr.on('data', (data) => {
+            if (stderr.length < 50000) stderr += data.toString();
+        });
+
+        // 6. Write Input to STDIN
+        if (input) {
+            child.stdin.write(input);
+        }
+        child.stdin.end(); // Important: Close stdin so process knows input is done
+
+        // 7. Cleanup & Resolve
+        child.on('close', (code) => {
+            clearTimeout(timer);
+
+            // Clean Files
+            try {
+                fs.rmSync(jobDir, { recursive: true, force: true });
+            } catch (e) { console.error("Cleanup failed:", e.message); }
+
+            // Determine Status
+            let status = "AC";
+            if (killed) {
+                status = "TLE";
+                stderr += "\nTime Limit Exceeded";
+            } else if (code !== 0) {
+                // Heuristic for Compilation Error vs Runtime Error
+                // Usually GCC prints to stderr. 
+                status = "RE";
+                // Simple keyword check (not perfect but helpful)
+                if ((language === 'cpp' || language === 'java') && stderr.includes('error:')) {
+                    status = "CE";
+                }
             }
 
-            const cmd = runCmd;
-
-            exec(cmd, { timeout: CMD_TIMEOUT }, (err, stdout, stderr) => {
-                // Helper to clean up
-                const cleanup = () => {
-                    try {
-                        // Retry loop or async cleanup could be better but sync is fine for MVP
-                        fs.rmSync(jobDir, { recursive: true, force: true });
-                    } catch (e) {
-                        console.error(`Failed to cleanup ${jobDir}:`, e.message);
-                    }
-                };
-
-                // Prepare result
-                const result = {
-                    stdout: stdout ? stdout.toString() : "",
-                    stderr: stderr ? stderr.toString() : "",
-                    status: "AC", // Default
-                };
-
-                if (err) {
-                    if (err.killed) {
-                        result.status = "TLE";
-                        result.stderr += "\nTime Limit Exceeded";
-                    } else if (result.stdout.includes("Compilation Error")) {
-                        result.status = "CE";
-                    } else {
-                        // Runtime Error usually
-                        result.status = "RE";
-                    }
-                }
-
-                cleanup();
-                resolve(result);
+            resolve({
+                stdout: stdout.trim(),
+                stderr: stderr.trim(),
+                status
             });
+        });
 
-        } catch (e) {
-            reject(e);
-        }
+        child.on('error', (err) => {
+            clearTimeout(timer);
+            try { fs.rmSync(jobDir, { recursive: true, force: true }); } catch (_) { }
+            resolve({ stdout: "", stderr: "Docker Execution Error: " + err.message, status: "RE" });
+        });
     });
 }
 
