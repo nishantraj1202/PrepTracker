@@ -119,6 +119,8 @@ Your tasks are:
 STRICT RULES:
 - Convert all readable text into text sections.
 - Do NOT keep the full image as the problem statement.
+- Do NOT include 'Example' sections in 'problem_description'. Put them ONLY in the 'examples' array.
+- In 'examples', format 'input' and 'output' as HUMAN-READABLE strings (e.g. "nums = [1,2], k = 3") NOT JSON arrays, unless necessary.
 - If sample inputs/outputs are visible in the image, extract them EXACTLY.
 - ONLY generate test cases if none are visible in the image.
 - Generated test cases must be minimal, deterministic, correct, and directly executable.
@@ -133,14 +135,14 @@ Return ONLY valid JSON matching this schema:
   "difficulty": "Easy" | "Medium" | "Hard" | null,
   "topic": string | null,
   "company": string | null,
-  "problem_description": string,
+  "problem_description": string, // do NOT include details about examples here
   "input_format": string,
   "output_format": string,
   "constraints": string,
   "examples": [
     {
-      "input": string,
-      "output": string,
+      "input": string, // "nums = [1,2], target = 3"
+      "output": string, // "5"
       "explanation": string | null
     }
   ],
@@ -533,87 +535,21 @@ app.put('/api/questions/:id', async (req, res) => {
     try {
         const { title, company, topic, difficulty, desc, constraints, snippets, date, img, slug, testCases, images } = req.body;
 
-        // Cloudinary Upload for Base64 Images (Logic shared with POST)
-        console.log(`[PUT] Update Question ${req.params.id}`);
-        console.log(`[PUT] Received Images payload length: ${images ? images.length : 'undefined'}`);
-        console.log(`[PUT] Received DeletedImages payload length: ${req.body.deletedImages ? req.body.deletedImages.length : 'undefined'}`);
-
-
-        let processedImages = [];
-        if (images && Array.isArray(images)) {
-            // ... processing logic remains ...
-            for (let image of images) {
-                if (image.startsWith('data:image')) {
-                    if (!isCloudinaryConfigured) {
-                        console.error("❌ Upload Failed: Cloudinary credentials missing in .env");
-                        processedImages.push(image);
-                        continue;
-                    }
-
-                    try {
-                        const uploadRes = await cloudinary.uploader.upload(image, {
-                            folder: "oa_hub_uploads",
-                        });
-                        console.log("Uploaded to Cloudinary (Update):", uploadRes.secure_url);
-                        processedImages.push(uploadRes.secure_url);
-                    } catch (upErr) {
-                        console.error("Cloudinary Upload Error:", upErr.message);
-                        processedImages.push(image);
-                    }
-                } else {
-                    processedImages.push(image);
-                }
-            }
-        } else if (images === undefined) {
-            // If images is NOT present in body, do not overwrite?
-            // But admin form sends it always. 
-            // If explicitly [], it clears.
-            // If undefined, let's play safe and NOT update it to avoid accidental clear if partial update?
-            // Actually, admin logic sends it. Let's assume processedImages is the source of truth if images was sent.
-        }
-
-        const updateData = {
-            title,
-            company,
-            topic,
-            difficulty,
-            desc,
-            constraints: constraints || "",
-            snippets: snippets || {},
-            testCases: testCases || [],
-            img: img || 'bg-gray-800',
-            slug: slug
-        };
-
-        // Only update images if it was provided in the request
-        if (images !== undefined) {
-            updateData.images = processedImages;
-        }
-
-        // Handle Explicit Deletions (Cleanup Storage)
-        const { deletedImages } = req.body;
-        if (deletedImages && Array.isArray(deletedImages) && isCloudinaryConfigured) {
-            for (const imgUrl of deletedImages) {
-                // Determine Public ID from URL
-                // Example: .../oa_hub_uploads/xyz123.jpg -> oa_hub_uploads/xyz123
-                try {
-                    const urlParts = imgUrl.split('/');
-                    const filename = urlParts.pop(); // xyz123.jpg
-                    const idWithoutExt = filename.split('.')[0]; // xyz123
-                    const folder = "oa_hub_uploads";
-                    const publicId = `${folder}/${idWithoutExt}`;
-
-                    await cloudinary.uploader.destroy(publicId);
-                    console.log(`🗑️ Deleted from Cloudinary: ${publicId}`);
-                } catch (delErr) {
-                    console.error("Failed to delete image from Cloudinary:", delErr.message);
-                }
-            }
-        }
-
         const updatedQuestion = await Question.findByIdAndUpdate(
             req.params.id,
-            updateData,
+            {
+                title,
+                company,
+                topic,
+                difficulty,
+                desc,
+                constraints: constraints || "",
+                snippets: snippets || {},
+                testCases: testCases || [],
+                img: img || 'bg-gray-800',
+                slug: slug,
+                images: images || [] // Allow updating/clearing images
+            },
             { new: true }
         );
 
@@ -688,6 +624,9 @@ app.delete('/api/admin/questions/:id', async (req, res) => {
     }
 });
 
+const { exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const { runCode } = require('./judge/runner');
 
 // 4. Code Execution Engine (Raw STDIN Model)
