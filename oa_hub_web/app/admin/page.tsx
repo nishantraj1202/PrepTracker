@@ -5,6 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import ImageCropper from "@/components/ImageCropper";
 
 export default function AdminPage() {
     // --- Post Form State ---
@@ -18,7 +19,8 @@ export default function AdminPage() {
         img: "bg-gray-800",
         testCases: JSON.stringify([
             { input: [1, 2, 3], output: 6 }
-        ], null, 2)
+        ], null, 2),
+        examples: JSON.stringify([], null, 2)
     });
     const [loading, setLoading] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
@@ -27,6 +29,10 @@ export default function AdminPage() {
     const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
     const [deletedImages, setDeletedImages] = useState<string[]>([]);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    // --- Crop State ---
+    const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+    const [cropIndex, setCropIndex] = useState<number | null>(null);
 
     // --- Review Panel State ---
     const [activeTab, setActiveTab] = useState<"post" | "review">("post");
@@ -94,7 +100,8 @@ export default function AdminPage() {
                 company: data.company || prev.company,
                 topic: data.topic || prev.topic,
                 difficulty: data.difficulty || prev.difficulty,
-                testCases: JSON.stringify(data.testCases || [], null, 2)
+                testCases: JSON.stringify(data.testCases || [], null, 2),
+                examples: JSON.stringify(data.examples || [], null, 2)
             }));
         } catch (error: any) {
             console.error(error);
@@ -159,7 +166,8 @@ export default function AdminPage() {
             desc: q.desc,
             constraints: q.constraints || "",
             img: q.img,
-            testCases: JSON.stringify(q.testCases || [], null, 2)
+            testCases: JSON.stringify(q.testCases || [], null, 2),
+            examples: JSON.stringify(q.examples || [], null, 2)
         });
         setEditingId(q.id);
         setDeletedImages([]); // Reset deleted tracker
@@ -200,6 +208,7 @@ export default function AdminPage() {
             const payload = {
                 ...formData,
                 testCases: parsedTestCases,
+                examples: JSON.parse(formData.examples || "[]"),
                 images: imagePreviews, // Explicitly save current images (or empty array)
                 deletedImages: deletedImages // Send tracking of deleted images
             };
@@ -393,15 +402,76 @@ export default function AdminPage() {
                                                             newImages.splice(i, 1);
                                                             setImagePreviews(newImages);
                                                         }}
-                                                        className="absolute top-1 right-1 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                                                        className="absolute top-1 right-1 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-10"
                                                         title="Remove this image"
                                                     >
                                                         ×
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            const md = `![Image](${src})`;
+                                                            navigator.clipboard.writeText(md);
+                                                            // Optional: Toast or visual feedback could go here
+                                                            const btn = e.currentTarget;
+                                                            const originalText = btn.innerText;
+                                                            btn.innerText = "✓ Copied";
+                                                            setTimeout(() => btn.innerText = originalText, 1500);
+                                                        }}
+                                                        className="absolute bottom-1 right-1 bg-black/70 hover:bg-black/90 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+                                                        title="Copy Markdown for Description"
+                                                    >
+                                                        Copy MD
+                                                    </button>
+
+                                                    {/* Open Original */}
+                                                    <a
+                                                        href={src}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="absolute bottom-1 left-1 bg-black/70 hover:bg-black/90 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+                                                        title="Open Full Image"
+                                                    >
+                                                        Open
+                                                    </a>
+
+                                                    {/* Crop Button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setImageToCrop(src);
+                                                            setCropIndex(i);
+                                                        }}
+                                                        className="absolute top-1 left-1 bg-blue-600 hover:bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-10"
+                                                        title="Crop Image"
+                                                    >
+                                                        ✂
                                                     </button>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
+                                )}
+
+                                {/* --- CROPPER MODAL --- */}
+                                {imageToCrop && (
+                                    <ImageCropper
+                                        imageSrc={imageToCrop}
+                                        onCancel={() => {
+                                            setImageToCrop(null);
+                                            setCropIndex(null);
+                                        }}
+                                        onSave={(newBase64) => {
+                                            if (cropIndex !== null) {
+                                                const newImages = [...imagePreviews];
+                                                newImages[cropIndex] = newBase64;
+                                                setImagePreviews(newImages);
+                                            }
+                                            setImageToCrop(null);
+                                            setCropIndex(null);
+                                        }}
+                                    />
                                 )}
 
                                 {/* AI Error */}
@@ -550,7 +620,7 @@ export default function AdminPage() {
                                             type="button"
                                             onClick={() => {
                                                 setEditingId(null);
-                                                setFormData({ ...formData, title: "", desc: "", constraints: "", testCases: "[]" });
+                                                setFormData({ ...formData, title: "", desc: "", constraints: "", testCases: "[]", examples: "[]" });
                                             }}
                                             className="w-full mt-2 bg-dark-700 hover:bg-dark-600 text-gray-300 font-bold py-2 rounded transition-colors"
                                         >
@@ -628,3 +698,12 @@ export default function AdminPage() {
         </div>
     );
 }
+
+
+
+
+
+
+
+
+

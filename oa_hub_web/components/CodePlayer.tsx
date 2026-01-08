@@ -195,66 +195,80 @@ export function CodePlayer({ question }: CodePlayerProps) {
                     style={{ width: `${leftWidth}%` }}
                     className="hidden md:block bg-dark-800 border-r border-dark-700 overflow-y-auto custom-scroll p-6 text-sm text-gray-300 leading-relaxed border-t-4 border-brand shrink-0"
                 >
-                    <h3 className="font-bold text-white mb-4 text-2xl">{question.title}</h3>
+                    {/* --- PREMIUM HEADER & METADATA STRIP --- */}
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-medium text-white tracking-tight mb-4">{question.title}</h1>
 
-                    {/* Display Screenshots if available */}
-                    {question?.images && question.images.length > 0 && (
-                        <div className="mb-6 grid grid-cols-1 gap-4">
-                            {question.images.map((img, idx) => (
-                                <div key={idx} className="relative w-full border border-dark-600 rounded-lg overflow-hidden bg-dark-900 group">
-                                    <img
-                                        src={img}
-                                        alt={`Scenario ${idx + 1}`}
-                                        className="w-full h-auto object-contain max-h-[600px]"
-                                        loading="lazy"
-                                    />
-                                    <div className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                        Image {idx + 1}
-                                    </div>
-                                </div>
-                            ))}
+                        {/* 1. Minimal Metadata Strip */}
+                        <div className="flex items-center gap-3 text-xs font-mono text-gray-500 border-b border-white/5 pb-4">
+                            <span className={cn(
+                                "uppercase tracking-wider",
+                                question.difficulty === "Easy" ? "text-green-400" :
+                                    question.difficulty === "Medium" ? "text-yellow-400" : "text-red-400"
+                            )}>
+                                {question.difficulty}
+                            </span>
+                            <span className="text-dark-600">•</span>
+                            <span className="uppercase tracking-wider hover:text-white transition-colors cursor-pointer">
+                                {question.topic}
+                            </span>
+                            <span className="text-dark-600">•</span>
+                            <span className="uppercase tracking-wider hover:text-white transition-colors cursor-pointer">
+                                {question.company}
+                            </span>
                         </div>
-                    )}
+                    </div>
 
+                    {/* --- PROBLEM DESCRIPTION --- */}
                     <div className="prose prose-invert prose-sm max-w-none 
-                        prose-headings:text-gray-100 prose-headings:font-bold prose-headings:mb-3 prose-headings:mt-6
-                        prose-p:text-gray-300 prose-p:leading-7 prose-p:mb-4
-                        prose-strong:text-white prose-strong:font-bold
-                        prose-code:bg-[#282828] prose-code:text-[#e6e6e6] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-sm prose-code:font-mono prose-code:text-[13px] prose-code:before:content-none prose-code:after:content-none
-                        prose-pre:bg-[#282828] prose-pre:border prose-pre:border-dark-600 prose-pre:rounded-lg prose-pre:p-4
-                        prose-li:text-gray-300 prose-li:marker:text-gray-500
+                        prose-p:text-gray-300 prose-p:leading-7 prose-p:mb-4 prose-p:font-light
+                        prose-strong:text-white prose-strong:font-medium
+                        prose-headings:text-gray-200 prose-headings:font-medium prose-headings:mb-3 prose-headings:mt-6
+                        prose-code:bg-white/5 prose-code:text-gray-200 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-[13px] prose-code:before:content-none prose-code:after:content-none
+                        prose-pre:bg-dark-900 prose-pre:border prose-pre:border-white/5 prose-pre:rounded-lg prose-pre:p-4
+                        prose-li:text-gray-300 prose-li:marker:text-dark-500
                         ">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {question.desc}
                         </ReactMarkdown>
                     </div>
 
-                    {/* Examples */}
+                    {/* --- TEXT-BASED EXAMPLES (Integrated Flow) --- */}
                     <div className="mt-8 space-y-6">
-                        {question.testCases?.slice(0, 3).map((tc, i) => (
+                        {(question.examples && question.examples.length > 0 ? question.examples : question.testCases?.slice(0, 3).map(tc => ({
+                            input: JSON.stringify(tc.input),
+                            output: JSON.stringify(tc.output),
+                            explanation: null
+                        })))?.map((ex: any, i: number) => (
                             <div key={i}>
-                                <h3 className="text-white font-bold text-base mb-3">Example {i + 1}:</h3>
-                                <div className="bg-[#282828] rounded-lg p-4 font-mono text-sm border-l-2 border-dark-600 shadow-sm transition-all hover:border-brand/50 hover:bg-[#2a2a2a]">
-                                    <div className="flex gap-3 mb-2">
-                                        <span className="text-gray-500 font-medium select-none min-w-[50px]">Input:</span>
-                                        <span className="text-gray-200">{JSON.stringify(tc.input)}</span>
+                                <div className="font-medium text-white mb-2">Example {i + 1}:</div>
+                                <div className="ml-4 space-y-2 text-sm leading-relaxed">
+                                    <div className="flex gap-2">
+                                        <span className="font-medium text-gray-400 min-w-[3.5rem]">Input:</span>
+                                        <span className="font-mono text-gray-200">{ex.input}</span>
                                     </div>
-                                    <div className="flex gap-3">
-                                        <span className="text-gray-500 font-medium select-none min-w-[50px]">Output:</span>
-                                        <span className="text-gray-200">{JSON.stringify(tc.output)}</span>
+                                    <div className="flex gap-2">
+                                        <span className="font-medium text-gray-400 min-w-[3.5rem]">Output:</span>
+                                        <span className="font-mono text-gray-200">{ex.output}</span>
                                     </div>
+                                    {ex.explanation && (
+                                        <div className="flex gap-2">
+                                            <span className="font-medium text-gray-400 min-w-[3.5rem]">Expl:</span>
+                                            <span className="text-gray-300">{ex.explanation}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    {/* Constraints */}
+                    {/* --- CONSTRAINTS --- */}
                     {question.constraints && (
-                        <div className="mt-8 pt-6 border-t border-dark-700">
-                            <h3 className="text-white font-bold text-base mb-4">Constraints:</h3>
+                        <div className="mt-10 pt-8 border-t border-white/5">
+                            <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">Constraints</h3>
                             <div className="prose prose-invert prose-sm max-w-none 
-                                     prose-li:text-gray-300 prose-li:marker:text-gray-500 prose-li:mb-1
-                                     prose-code:bg-[#282828] prose-code:text-[#e6e6e6] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-sm prose-code:font-mono prose-code:text-[13px] prose-code:before:content-none prose-code:after:content-none
+                                     prose-li:text-gray-400 prose-li:marker:text-dark-600 prose-li:mb-1
+                                     prose-code:bg-white/5 prose-code:text-gray-300 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-[12px] prose-code:before:content-none prose-code:after:content-none
                                 ">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {question.constraints}
