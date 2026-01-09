@@ -3,7 +3,7 @@
 **PrepTracker** is a modern, full-stack platform designed to help students and professionals prepare for **technical interviews and Online Assessments (OAs)**.  
 It combines curated coding problems, company-specific question sets, AI assistance, and a secure code execution engine — all in one place.
 
-🌐 **Live App**: [https://prep-tracker-12.vercel.app/  ](https://prep-tracerr.vercel.app/)
+🌐 **Live App**: [https://prep-tracerr.vercel.app/  ](https://prep-tracerr.vercel.app/)
 
 📦 **Repository**: https://github.com/nishantraj1202/PrepTracker
 
@@ -182,4 +182,5 @@ See the [LICENSE](LICENSE) file for details.
 ---
 
 > **PrepTracker** is built with the vision of making interview preparation more structured, intelligent, and developer-friendly.
+
 
