@@ -6,6 +6,7 @@ import { QuestionCard } from "@/components/QuestionCard";
 import { Briefcase } from "lucide-react";
 import Link from "next/link";
 import { type Question } from "@/types";
+import { API_URL } from "@/lib/utils";
 
 interface PageProps {
     params: Promise<{ slug: string; questionSlug: string }>;
@@ -13,7 +14,7 @@ interface PageProps {
 
 async function getQuestion(slug: string): Promise<Question | null> {
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions/${slug}`, {
+        const res = await fetch(`${API_URL}/api/questions/${slug}`, {
             cache: 'no-store'
         });
         if (!res.ok) return null;

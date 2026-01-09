@@ -6,6 +6,7 @@ import { QuestionCard } from "@/components/QuestionCard";
 import { BarChart } from "lucide-react";
 import Link from "next/link";
 import { type Question } from "@/types";
+import { API_URL } from "@/lib/utils";
 
 interface PageProps {
     params: Promise<{ slug: string }>;
@@ -13,7 +14,7 @@ interface PageProps {
 
 async function getQuestionsByDifficulty(difficulty: string): Promise<Question[]> {
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions?difficulty=${difficulty}`, { cache: 'no-store' });
+        const res = await fetch(`${API_URL}/api/questions?difficulty=${difficulty}`, { cache: 'no-store' });
         if (!res.ok) return [];
         return res.json();
     } catch (error) {

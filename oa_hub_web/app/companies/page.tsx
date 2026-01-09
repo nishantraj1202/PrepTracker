@@ -2,7 +2,7 @@ import React from "react";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, API_URL } from "@/lib/utils";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ interface Company {
 
 async function getCompanies(): Promise<Company[]> {
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies`, { cache: 'no-store' });
+        const res = await fetch(`${API_URL}/api/companies`, { cache: 'no-store' });
         if (!res.ok) return [];
         return res.json();
     } catch (error) {

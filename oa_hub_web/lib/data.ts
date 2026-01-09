@@ -3,9 +3,9 @@ import { type Question } from "@/types";
 export const questionsData: Question[] = [
     {
         id: 0,
+        slug: "two-sum",
         company: "Google",
         title: "Two Sum",
-        slug: "two-sum",
         topic: "Arrays",
         difficulty: "Easy",
         likes: "99%",
@@ -16,9 +16,9 @@ export const questionsData: Question[] = [
     },
     {
         id: 1,
+        slug: "design-global-file-storage",
         company: "Google",
         title: "Design a Global File Storage System",
-        slug: "design-global-file-storage-system",
         topic: "System Design",
         difficulty: "Hard",
         likes: "98%",
@@ -29,9 +29,9 @@ export const questionsData: Question[] = [
     },
     {
         id: 2,
+        slug: "merge-k-sorted-lists",
         company: "Google",
         title: "Merge k Sorted Lists",
-        slug: "merge-k-sorted-lists",
         topic: "Heaps",
         difficulty: "Hard",
         likes: "95%",
@@ -42,9 +42,9 @@ export const questionsData: Question[] = [
     },
     {
         id: 3,
+        slug: "find-missing-number",
         company: "Amazon",
         title: "Find the Missing Number",
-        slug: "find-the-missing-number",
         topic: "Arrays",
         difficulty: "Easy",
         likes: "99%",
@@ -55,9 +55,9 @@ export const questionsData: Question[] = [
     },
     {
         id: 4,
+        slug: "reverse-linked-list-group-k",
         company: "Microsoft",
         title: "Reverse Linked List Group K",
-        slug: "reverse-linked-list-group-k",
         topic: "LinkedList",
         difficulty: "Medium",
         likes: "92%",
@@ -68,9 +68,9 @@ export const questionsData: Question[] = [
     },
     {
         id: 5,
+        slug: "ride-matching-algorithm",
         company: "Uber",
         title: "Ride Matching Algorithm",
-        slug: "ride-matching-algorithm",
         topic: "System Design",
         difficulty: "Medium",
         likes: "97%",
@@ -81,9 +81,9 @@ export const questionsData: Question[] = [
     },
     {
         id: 6,
+        slug: "group-anagrams",
         company: "Netflix",
         title: "Group Anagrams",
-        slug: "group-anagrams",
         topic: "Strings",
         difficulty: "Medium",
         likes: "94%",
@@ -94,9 +94,9 @@ export const questionsData: Question[] = [
     },
     {
         id: 7,
+        slug: "binary-tree-vertical-order",
         company: "Meta",
         title: "Binary Tree Vertical Order",
-        slug: "binary-tree-vertical-order",
         topic: "Trees",
         difficulty: "Hard",
         likes: "91%",
@@ -107,9 +107,9 @@ export const questionsData: Question[] = [
     },
     {
         id: 8,
+        slug: "longest-substring-no-repeats",
         company: "Apple",
         title: "Longest Substring No Repeats",
-        slug: "longest-substring-no-repeats",
         topic: "Strings",
         difficulty: "Medium",
         likes: "96%",

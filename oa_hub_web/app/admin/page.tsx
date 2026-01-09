@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar } from "@/components/Sidebar";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, API_URL } from "@/lib/utils";
+import { ImagePlus, Loader2 } from "lucide-react";
 import ImageCropper from "@/components/ImageCropper";
 
 export default function AdminPage() {
@@ -17,22 +18,63 @@ export default function AdminPage() {
         desc: "",
         constraints: "",
         img: "bg-gray-800",
+        images: [] as string[],
         testCases: JSON.stringify([
             { input: [1, 2, 3], output: 6 }
-        ], null, 2),
-        examples: JSON.stringify([], null, 2)
+        ], null, 2)
     });
     const [loading, setLoading] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+    const [adminKey, setAdminKey] = useState("");
     const [deletedImages, setDeletedImages] = useState<string[]>([]);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // --- Crop State ---
     const [imageToCrop, setImageToCrop] = useState<string | null>(null);
     const [cropIndex, setCropIndex] = useState<number | null>(null);
+
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const descImageInputRef = useRef<HTMLInputElement>(null);
+    const descRef = useRef<HTMLTextAreaElement>(null);
+    const [isImageUploading, setIsImageUploading] = useState(false);
+
+    // --- Auth State ---
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [passwordInput, setPasswordInput] = useState("");
+    const [authError, setAuthError] = useState(false);
+
+    // SHA-256 Hash of "admin"
+    const ADMIN_HASH = "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918";
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const encoder = new TextEncoder();
+        const data = encoder.encode(passwordInput);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        if (hashHex === ADMIN_HASH) {
+            setIsAuthenticated(true);
+            setAuthError(false);
+            setAdminKey(passwordInput); // Store raw key for backend calls
+        } else {
+            setAuthError(true);
+        }
+    };
+
+    // Initial load key
+    useEffect(() => {
+        const stored = localStorage.getItem("adminKey");
+        if (stored) setAdminKey(stored);
+    }, []);
+
+    const saveKey = (val: string) => {
+        setAdminKey(val);
+        localStorage.setItem("adminKey", val);
+    };
 
     // --- Review Panel State ---
     const [activeTab, setActiveTab] = useState<"post" | "review">("post");
@@ -41,22 +83,30 @@ export default function AdminPage() {
 
     // --- Fetch Pending Questions ---
     useEffect(() => {
-        if (activeTab === "review") {
-            fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/questions`)
-                .then(res => res.json())
-                .then(data => setPendingQuestions(data))
+        if (activeTab === "review" && adminKey) {
+            fetch(`${API_URL}/api/admin/questions`, {
+                headers: { 'x-admin-secret': adminKey }
+            })
+                .then(res => {
+                    if (res.status === 401) throw new Error("Unauthorized");
+                    return res.json();
+                })
+                .then(data => setPendingQuestions(Array.isArray(data) ? data : []))
                 .catch(err => console.error("Failed to fetch pending questions", err));
         }
-    }, [activeTab, refreshTrigger]);
+    }, [activeTab, refreshTrigger, adminKey]);
 
     // --- Actions ---
     const handleApprove = async (id: string) => {
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/questions/${id}/approve`, {
-                method: 'PUT'
+            const res = await fetch(`${API_URL}/api/admin/questions/${id}/approve`, {
+                method: 'PUT',
+                headers: { 'x-admin-secret': adminKey }
             });
             if (res.ok) {
                 setPendingQuestions(prev => prev.filter(q => q.id !== id));
+            } else {
+                alert("Failed to approve. Check admin key.");
             }
         } catch (err) {
             console.error("Approve failed", err);
@@ -66,48 +116,17 @@ export default function AdminPage() {
     const handleReject = async (id: string) => {
         if (!confirm("Are you sure you want to delete this question?")) return;
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/questions/${id}`, {
-                method: 'DELETE'
+            const res = await fetch(`${API_URL}/api/admin/questions/${id}`, {
+                method: 'DELETE',
+                headers: { 'x-admin-secret': adminKey }
             });
             if (res.ok) {
                 setPendingQuestions(prev => prev.filter(q => q.id !== id));
+            } else {
+                alert("Failed to reject. Check admin key.");
             }
         } catch (err) {
             console.error("Reject failed", err);
-        }
-    };
-
-    // --- Helper: Run AI Extraction ---
-    const runAiExtraction = async (imageData: string[]) => {
-        setAiLoading(true);
-        setAiError(null);
-        try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/extract/image`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ images: imageData })
-            });
-
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || data.details || "AI Extraction failed");
-
-            // Populate Form
-            setFormData(prev => ({
-                ...prev,
-                title: data.title || prev.title,
-                desc: data.desc || prev.desc,
-                constraints: data.constraints || prev.constraints,
-                company: data.company || prev.company,
-                topic: data.topic || prev.topic,
-                difficulty: data.difficulty || prev.difficulty,
-                testCases: JSON.stringify(data.testCases || [], null, 2),
-                examples: JSON.stringify(data.examples || [], null, 2)
-            }));
-        } catch (error: any) {
-            console.error(error);
-            setAiError(error.message || "Failed to process images");
-        } finally {
-            setAiLoading(false);
         }
     };
 
@@ -115,8 +134,9 @@ export default function AdminPage() {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
+        setAiLoading(true);
+        setAiError(null);
         setImagePreviews([]);
-        setDeletedImages([]);
 
         try {
             // Read all files as Base64
@@ -132,12 +152,36 @@ export default function AdminPage() {
             const base64Images = await Promise.all(promises);
             setImagePreviews(base64Images);
 
-            // Trigger AI
-            await runAiExtraction(base64Images);
+            // Send to AI
+            const res = await fetch(`${API_URL}/api/admin/extract/image`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-secret': adminKey
+                },
+                body: JSON.stringify({ images: base64Images })
+            });
 
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || data.details || "AI Extraction failed");
+
+            // Populate Form
+            setFormData(prev => ({
+                ...prev,
+                title: data.title || prev.title,
+                desc: data.desc || prev.desc,
+                constraints: data.constraints || prev.constraints,
+                company: data.company || prev.company,
+                topic: data.topic || prev.topic,
+                difficulty: data.difficulty || prev.difficulty,
+                testCases: JSON.stringify(data.testCases || [], null, 2),
+                images: base64Images // Save images to form data
+            }));
         } catch (error: any) {
-            console.error(error);
-            setAiError("Failed to read image files");
+            console.error("AI Extraction Error:", error);
+            setAiError(error.message || "Failed to process images");
+        } finally {
+            setAiLoading(false);
         }
     };
 
@@ -145,19 +189,74 @@ export default function AdminPage() {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const [editingId, setEditingId] = useState<string | null>(null);
+    // Handle inline image upload for Description
+    const handleDescriptionImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
-    const handleEdit = async (q: any) => {
-        try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/questions/${q.id}`);
-            if (res.ok) {
-                const fullQuestion = await res.json();
-                q = fullQuestion;
-            }
-        } catch (err) {
-            console.error("Failed to fetch full question data:", err);
+        // Check if cursor is in description textarea
+        if (document.activeElement !== descRef.current) {
+            // Focus the description field first
+            descRef.current?.focus();
         }
 
+        setIsImageUploading(true);
+        try {
+            // Read file as base64
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            // Upload to Cloudinary
+            const res = await fetch(`${API_URL}/api/upload/image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64 })
+            });
+
+            if (!res.ok) throw new Error("Upload failed");
+
+            const data = await res.json();
+            const imageUrl = data.url;
+
+            // Insert markdown at cursor position
+            const textarea = descRef.current;
+            if (textarea) {
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const text = formData.desc;
+                const before = text.substring(0, start);
+                const after = text.substring(end);
+                const imageMarkdown = `\n![image](${imageUrl})\n`;
+                const newText = before + imageMarkdown + after;
+
+                setFormData(prev => ({ ...prev, desc: newText }));
+
+                // Set cursor after inserted image
+                setTimeout(() => {
+                    const newPos = start + imageMarkdown.length;
+                    textarea.focus();
+                    textarea.setSelectionRange(newPos, newPos);
+                }, 0);
+            }
+        } catch (error) {
+            console.error("Image upload error:", error);
+            alert("Failed to upload image. Please try again.");
+        } finally {
+            setIsImageUploading(false);
+            // Reset file input
+            if (descImageInputRef.current) {
+                descImageInputRef.current.value = "";
+            }
+        }
+    };
+
+    const [editingId, setEditingId] = useState<string | null>(null);
+
+    const handleEdit = (q: any) => {
         setFormData({
             title: q.title,
             company: q.company,
@@ -166,26 +265,11 @@ export default function AdminPage() {
             desc: q.desc,
             constraints: q.constraints || "",
             img: q.img,
-            testCases: JSON.stringify(q.testCases || [], null, 2),
-            examples: JSON.stringify(q.examples || [], null, 2)
+            images: q.images || [], // Load existing images
+            testCases: JSON.stringify(q.testCases || [], null, 2)
         });
+        setImagePreviews(q.images || []); // SHOW PREVIEWS
         setEditingId(q.id);
-        setDeletedImages([]); // Reset deleted tracker
-
-        // Auto-Show Previews if existing images
-        if (q.images && q.images.length > 0) {
-            setImagePreviews(q.images);
-
-            // AUTO-EXTRACT: If description is generic placeholder, try to re-extract
-            const isGenericDesc = !q.desc || q.desc.includes("See attached screenshots");
-            if (isGenericDesc) {
-                console.log("Auto-extracting from existing images...");
-                runAiExtraction(q.images);
-            }
-        } else {
-            setImagePreviews([]);
-        }
-
         setActiveTab("post");
     };
 
@@ -208,22 +292,23 @@ export default function AdminPage() {
             const payload = {
                 ...formData,
                 testCases: parsedTestCases,
-                examples: JSON.parse(formData.examples || "[]"),
-                images: imagePreviews, // Explicitly save current images (or empty array)
-                deletedImages: deletedImages // Send tracking of deleted images
+                status: 'approved' // AUTO-APPROVE Admin Submissions
             };
 
-            let url = `${process.env.NEXT_PUBLIC_API_URL}/questions`;
+            let url = `${API_URL}/api/questions`;
             let method = 'POST';
 
             if (editingId) {
-                url = `${process.env.NEXT_PUBLIC_API_URL}/questions/${editingId}`;
+                url = `${API_URL}/api/questions/${editingId}`;
                 method = 'PUT';
             }
 
             const res = await fetch(url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-secret': adminKey
+                },
                 body: JSON.stringify(payload)
             });
 
@@ -231,8 +316,6 @@ export default function AdminPage() {
                 setStatus("success");
                 setFormData({ ...formData, title: "", desc: "", constraints: "", testCases: "[]" }); // Reset some fields
                 setEditingId(null);
-                setImagePreviews([]); // Clear image previews
-                setDeletedImages([]);  // Clear deleted images tracker
                 setRefreshTrigger(prev => prev + 1); // Refresh list if looking at review
             } else {
                 const errorData = await res.json();
@@ -249,32 +332,7 @@ export default function AdminPage() {
     };
 
 
-
-    // --- Auth State ---
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [passwordInput, setPasswordInput] = useState("");
-    const [authError, setAuthError] = useState(false);
-
-    // SHA-256 Hash of "admin"
-    // To change password, generate a new SHA-256 hash
-    const ADMIN_HASH = "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918";
-
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const encoder = new TextEncoder();
-        const data = encoder.encode(passwordInput);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-        if (hashHex === ADMIN_HASH) {
-            setIsAuthenticated(true);
-            setAuthError(false);
-        } else {
-            setAuthError(true);
-        }
-    };
-
+    // --- Render Login Screen if not authenticated ---
     if (!isAuthenticated) {
         return (
             <div className="flex flex-col h-screen overflow-hidden bg-dark-950 text-gray-200">
@@ -293,7 +351,10 @@ export default function AdminPage() {
                                 <input
                                     type="password"
                                     value={passwordInput}
-                                    onChange={(e) => setPasswordInput(e.target.value)}
+                                    onChange={(e) => {
+                                        setPasswordInput(e.target.value);
+                                        setAuthError(false); // Clear error on input change
+                                    }}
                                     placeholder="Secret Key"
                                     className="w-full bg-black border border-dark-700 rounded px-4 py-3 text-white focus:border-brand focus:outline-none transition-colors"
                                     autoFocus
@@ -324,6 +385,10 @@ export default function AdminPage() {
                     <div className="max-w-4xl mx-auto">
                         <div className="flex items-center justify-between mb-6">
                             <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+
+                            <div className="flex items-center gap-2">
+                                {/* Key is managed via Lock Screen now */}
+                            </div>
 
                             {/* Tab Switcher */}
                             <div className="flex bg-dark-800 rounded-lg p-1 gap-1">
@@ -365,7 +430,6 @@ export default function AdminPage() {
                                         onChange={handleImageUpload}
                                     />
                                     <button
-                                        type="button"
                                         onClick={() => fileInputRef.current?.click()}
                                         disabled={aiLoading}
                                         className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
@@ -381,7 +445,10 @@ export default function AdminPage() {
                                             <span className="text-gray-400 text-sm">Attached Images ({imagePreviews.length})</span>
                                             <button
                                                 type="button"
-                                                onClick={() => setImagePreviews([])}
+                                                onClick={() => {
+                                                    setImagePreviews([]);
+                                                    setDeletedImages(prev => [...prev, ...imagePreviews]);
+                                                }}
                                                 className="text-red-400 text-xs hover:text-red-300 underline"
                                             >
                                                 Remove All Images
@@ -395,9 +462,7 @@ export default function AdminPage() {
                                                         type="button"
                                                         onClick={() => {
                                                             const toDelete = imagePreviews[i];
-                                                            // Track deleted image for backend cleanup
                                                             setDeletedImages(prev => [...prev, toDelete]);
-
                                                             const newImages = [...imagePreviews];
                                                             newImages.splice(i, 1);
                                                             setImagePreviews(newImages);
@@ -413,7 +478,6 @@ export default function AdminPage() {
                                                             e.preventDefault();
                                                             const md = `![Image](${src})`;
                                                             navigator.clipboard.writeText(md);
-                                                            // Optional: Toast or visual feedback could go here
                                                             const btn = e.currentTarget;
                                                             const originalText = btn.innerText;
                                                             btn.innerText = "✓ Copied";
@@ -425,7 +489,6 @@ export default function AdminPage() {
                                                         Copy MD
                                                     </button>
 
-                                                    {/* Open Original */}
                                                     <a
                                                         href={src}
                                                         target="_blank"
@@ -436,7 +499,6 @@ export default function AdminPage() {
                                                         Open
                                                     </a>
 
-                                                    {/* Crop Button */}
                                                     <button
                                                         type="button"
                                                         onClick={() => {
@@ -572,13 +634,38 @@ export default function AdminPage() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-400 mb-1">Description</label>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <label className="block text-sm font-medium text-gray-400">Description</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="file"
+                                                    ref={descImageInputRef}
+                                                    accept="image/*"
+                                                    onChange={handleDescriptionImageUpload}
+                                                    className="hidden"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => descImageInputRef.current?.click()}
+                                                    disabled={isImageUploading}
+                                                    className="flex items-center gap-1 text-xs bg-dark-700 hover:bg-dark-600 text-gray-300 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                                >
+                                                    {isImageUploading ? (
+                                                        <><Loader2 className="w-3 h-3 animate-spin" /> Uploading...</>
+                                                    ) : (
+                                                        <><ImagePlus className="w-3 h-3" /> Attach Image</>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
                                         <textarea
+                                            ref={descRef}
                                             name="desc"
                                             value={formData.desc}
                                             onChange={handleChange}
                                             required
-                                            rows={5}
+                                            rows={8}
+                                            placeholder="Markdown supported. Use the Attach Image button to insert images at cursor."
                                             className="w-full bg-dark-900 border border-dark-700 rounded p-2 text-white focus:border-brand focus:outline-none"
                                         />
                                     </div>
@@ -610,7 +697,7 @@ export default function AdminPage() {
 
                                     <button
                                         type="submit"
-                                        disabled={loading}
+                                        disabled={loading || aiLoading}
                                         className="w-full bg-brand hover:bg-yellow-500 text-black font-bold py-3 rounded transition-colors disabled:opacity-50"
                                     >
                                         {loading ? "Processing..." : (editingId ? "Update Question" : "Submit for Review")}
@@ -620,7 +707,7 @@ export default function AdminPage() {
                                             type="button"
                                             onClick={() => {
                                                 setEditingId(null);
-                                                setFormData({ ...formData, title: "", desc: "", constraints: "", testCases: "[]", examples: "[]" });
+                                                setFormData({ ...formData, title: "", desc: "", constraints: "", testCases: "[]" });
                                             }}
                                             className="w-full mt-2 bg-dark-700 hover:bg-dark-600 text-gray-300 font-bold py-2 rounded transition-colors"
                                         >
@@ -698,12 +785,3 @@ export default function AdminPage() {
         </div>
     );
 }
-
-
-
-
-
-
-
-
-

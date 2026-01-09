@@ -4,7 +4,7 @@ import { Navbar } from "@/components/Navbar";
 import { Sidebar } from "@/components/Sidebar";
 import { QuestionList } from "@/components/QuestionList";
 import { CheckCircle, SearchX } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, API_URL } from "@/lib/utils";
 import Link from "next/link";
 import { type Question } from "@/types";
 
@@ -46,7 +46,7 @@ interface CompanyData {
 
 async function getCompanyData(slug: string): Promise<CompanyData | null> {
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${slug}`, { cache: 'no-store' });
+        const res = await fetch(`${API_URL}/api/companies/${slug}`, { cache: 'no-store' });
         if (!res.ok) return null;
         return res.json();
     } catch (error) {

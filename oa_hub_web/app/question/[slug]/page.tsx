@@ -5,7 +5,7 @@ import { CodePlayer } from "@/components/CodePlayer";
 import { AuthorCard } from "@/components/AuthorCard";
 import { CheckCircle, Share2, ListPlus, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, API_URL } from "@/lib/utils";
 import { type Question } from "@/types";
 
 interface PageProps {
@@ -14,7 +14,7 @@ interface PageProps {
 
 async function getQuestion(slug: string): Promise<Question | null> {
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions/${slug}`, {
+        const res = await fetch(`${API_URL}/api/questions/${slug}`, {
             cache: 'no-store',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -27,7 +27,7 @@ async function getQuestion(slug: string): Promise<Question | null> {
 
 async function getUpNext(currentId: string | number): Promise<Question[]> {
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions`, { cache: 'no-store' });
+        const res = await fetch(`${API_URL}/api/questions`, { cache: 'no-store' });
         if (!res.ok) return [];
         const all = await res.json();
         return all.filter((q: Question) => q.id !== currentId).slice(0, 5);

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { CodePlayer } from "@/components/CodePlayer";
 import { Upload, FileText, ArrowRight, Loader2, ArrowLeft, CheckCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, API_URL } from "@/lib/utils";
 
 export default function ContributePage() {
     const [step, setStep] = useState<"select" | "input" | "preview" | "success">("select");
@@ -55,7 +55,7 @@ export default function ContributePage() {
     const directSubmit = async (data: any) => {
         setLoading(true);
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions`, {
+            const res = await fetch(`${API_URL}/api/questions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -85,17 +85,35 @@ export default function ContributePage() {
         setLoading(true);
 
         try {
-            // SKIP Extraction - Submit Images Directly for Admin Review
+            // Call AI Extraction API first
+            const extractRes = await fetch(`${API_URL}/api/admin/extract/image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ images: imgPreviews })
+            });
+
+            let extractedData: any = {};
+            if (extractRes.ok) {
+                extractedData = await extractRes.json();
+                console.log("Extracted Data:", extractedData);
+            } else {
+                console.warn("Extraction failed, submitting with default values.");
+            }
+
+            // Prepare final data with extracted content
             const finalData = {
-                title: "", // Let backend default it
-                company: company || "Unknown",
-                desc: extraInfo || "",
-                constraints: "",
-                images: imgPreviews, // Send all images
-                image: imgPreviews[0] // Set primary
+                title: extractedData.title || "", // Let backend default if empty
+                company: company || extractedData.company || "Unknown",
+                topic: extractedData.topic || "Other",
+                difficulty: extractedData.difficulty || "Medium",
+                desc: extractedData.desc || extraInfo || "",
+                constraints: extractedData.constraints || "",
+                testCases: extractedData.testCases || [],
+                snippets: extractedData.snippets || {},
+                images: imgPreviews, // Include images for backup/review
             };
 
-            // DIRECT SUBMIT
+            // Submit to API
             await directSubmit(finalData);
 
         } catch (error) {

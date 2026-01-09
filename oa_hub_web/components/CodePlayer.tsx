@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import Editor from "@monaco-editor/react";
 import { Play, Volume2, Settings, Maximize, X, Loader2, RefreshCw } from "lucide-react";
 import { type Question } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, API_URL } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { generateSignatures } from "@/lib/signatureGenerator";
@@ -139,7 +139,7 @@ export function CodePlayer({ question }: CodePlayerProps) {
         setLastRunMode(activeTab);
 
         try {
-            const response = await fetch('http://localhost:5000/api/execute', {
+            const response = await fetch(`${API_URL}/api/execute`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

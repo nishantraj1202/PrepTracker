@@ -1,3 +1,5 @@
+// Type inference and function signature generator for coding problems
+
 export interface TestCase {
     input: any[];
     output: any;
@@ -139,16 +141,7 @@ export function generateSignatures(testCases: TestCase[]): Signatures {
     }
 
     const firstCase = testCases[0];
-
-    // Ensure input is valid and is an array
-    if (!firstCase || !firstCase.input) {
-        return getDefaultSignatures();
-    }
-
-    // If input is not an array, wrap it in an array
-    const inputs = Array.isArray(firstCase.input) ? firstCase.input : [firstCase.input];
-
-    const inputTypes = inputs.map(arg => inferType(arg));
+    const inputTypes = firstCase.input.map(arg => inferType(arg));
     const outputType = inferType(firstCase.output);
 
     // Generate parameter list for each language

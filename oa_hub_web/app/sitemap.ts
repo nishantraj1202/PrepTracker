@@ -1,7 +1,9 @@
 import { MetadataRoute } from 'next';
 
+import { API_URL as BASE_API_URL } from "@/lib/utils";
+
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://preptracker.example.com';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = `${BASE_API_URL}/api`;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // 1. Static Routes
