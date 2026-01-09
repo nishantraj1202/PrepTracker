@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import Editor from "@monaco-editor/react";
 import { Play, Volume2, Settings, Maximize, X, Loader2, RefreshCw } from "lucide-react";
 import { type Question } from "@/types";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { generateSignatures } from "@/lib/signatureGenerator";
 
 interface CodePlayerProps {
     question: Question;
@@ -56,25 +57,51 @@ export function CodePlayer({ question }: CodePlayerProps) {
     const [activeTab, setActiveTab] = useState<'scenes' | 'roleplay'>('scenes');
     const [customInput, setCustomInput] = useState("[2,7,11,15]\n9");
     const [lastRunMode, setLastRunMode] = useState<'scenes' | 'roleplay' | null>(null);
+    const [consoleHeight, setConsoleHeight] = useState(300); // Resizable height
+    const [isConsoleDragging, setIsConsoleDragging] = useState(false);
     const consoleRef = useRef<HTMLDivElement>(null);
+    const consolePanelRef = useRef<HTMLDivElement>(null);
+
+    // Handle console (vertical) resize drag
+    useEffect(() => {
+        if (!isConsoleDragging) return;
+
+        const handleConsoleDrag = (e: MouseEvent) => {
+            if (!consolePanelRef.current) return;
+            const containerRect = consolePanelRef.current.getBoundingClientRect();
+            const newHeight = containerRect.bottom - e.clientY;
+            // Clamp between 100px and 80% of container height
+            const clampedHeight = Math.min(Math.max(newHeight, 100), containerRect.height * 0.8);
+            setConsoleHeight(clampedHeight);
+        };
+
+        const handleConsoleDragEnd = () => {
+            setIsConsoleDragging(false);
+        };
+
+        document.addEventListener('mousemove', handleConsoleDrag);
+        document.addEventListener('mouseup', handleConsoleDragEnd);
+
+        return () => {
+            document.removeEventListener('mousemove', handleConsoleDrag);
+            document.removeEventListener('mouseup', handleConsoleDragEnd);
+        };
+    }, [isConsoleDragging]);
+
+    // Generate dynamic templates based on test cases
+    const signatures = useMemo(() => {
+        return generateSignatures(question.testCases || []);
+    }, [JSON.stringify(question.testCases)]);
 
     // Update code template when language changes
     useEffect(() => {
         if (question.snippets && question.snippets[language]) {
             setCode(question.snippets[language]!);
         } else {
-            // Fallback to templates if no snippet provided
-            if (language === "cpp") {
-                setCode(CPP_TEMPLATE(question.title));
-            } else if (language === "javascript") {
-                setCode(JS_TEMPLATE);
-            } else if (language === "python") {
-                setCode(PYTHON_TEMPLATE);
-            } else if (language === "java") {
-                setCode(JAVA_TEMPLATE);
-            }
+            // Use generated signatures based on test cases
+            setCode(signatures[language]);
         }
-    }, [language, question.title, JSON.stringify(question.snippets)]);
+    }, [language, question.title, JSON.stringify(question.snippets), signatures]);
 
     // Helper: Parse logs to find status and output for a specific test case
     const getTestCaseResult = (index: number) => {
@@ -112,7 +139,7 @@ export function CodePlayer({ question }: CodePlayerProps) {
         setLastRunMode(activeTab);
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/execute`, {
+            const response = await fetch('http://localhost:5000/api/execute', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -195,80 +222,66 @@ export function CodePlayer({ question }: CodePlayerProps) {
                     style={{ width: `${leftWidth}%` }}
                     className="hidden md:block bg-dark-800 border-r border-dark-700 overflow-y-auto custom-scroll p-6 text-sm text-gray-300 leading-relaxed border-t-4 border-brand shrink-0"
                 >
-                    {/* --- PREMIUM HEADER & METADATA STRIP --- */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-medium text-white tracking-tight mb-4">{question.title}</h1>
+                    <h3 className="font-bold text-white mb-4 text-2xl">{question.title}</h3>
 
-                        {/* 1. Minimal Metadata Strip */}
-                        <div className="flex items-center gap-3 text-xs font-mono text-gray-500 border-b border-white/5 pb-4">
-                            <span className={cn(
-                                "uppercase tracking-wider",
-                                question.difficulty === "Easy" ? "text-green-400" :
-                                    question.difficulty === "Medium" ? "text-yellow-400" : "text-red-400"
-                            )}>
-                                {question.difficulty}
-                            </span>
-                            <span className="text-dark-600">•</span>
-                            <span className="uppercase tracking-wider hover:text-white transition-colors cursor-pointer">
-                                {question.topic}
-                            </span>
-                            <span className="text-dark-600">•</span>
-                            <span className="uppercase tracking-wider hover:text-white transition-colors cursor-pointer">
-                                {question.company}
-                            </span>
+                    {/* Display Screenshots (HIDDEN as per new design) */}
+                    {/* {question.images && question.images.length > 0 && (
+                        <div className="mb-6 grid grid-cols-1 gap-4">
+                            {question.images.map((img, idx) => (
+                                <div key={idx} className="relative w-full border border-dark-600 rounded-lg overflow-hidden bg-dark-900 group">
+                                    <img
+                                        src={img}
+                                        alt={`Scenario ${idx + 1}`}
+                                        className="w-full h-auto object-contain max-h-[600px]"
+                                        loading="lazy"
+                                    />
+                                    <div className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                        Image {idx + 1}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    </div>
+                    )} */}
 
-                    {/* --- PROBLEM DESCRIPTION --- */}
                     <div className="prose prose-invert prose-sm max-w-none 
-                        prose-p:text-gray-300 prose-p:leading-7 prose-p:mb-4 prose-p:font-light
-                        prose-strong:text-white prose-strong:font-medium
-                        prose-headings:text-gray-200 prose-headings:font-medium prose-headings:mb-3 prose-headings:mt-6
-                        prose-code:bg-white/5 prose-code:text-gray-200 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-[13px] prose-code:before:content-none prose-code:after:content-none
-                        prose-pre:bg-dark-900 prose-pre:border prose-pre:border-white/5 prose-pre:rounded-lg prose-pre:p-4
-                        prose-li:text-gray-300 prose-li:marker:text-dark-500
+                        prose-headings:text-gray-100 prose-headings:font-bold prose-headings:mb-3 prose-headings:mt-6
+                        prose-p:text-gray-300 prose-p:leading-7 prose-p:mb-4
+                        prose-strong:text-white prose-strong:font-bold
+                        prose-code:bg-[#282828] prose-code:text-[#e6e6e6] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-sm prose-code:font-mono prose-code:text-[13px] prose-code:before:content-none prose-code:after:content-none
+                        prose-pre:bg-[#282828] prose-pre:border prose-pre:border-dark-600 prose-pre:rounded-lg prose-pre:p-4
+                        prose-li:text-gray-300 prose-li:marker:text-gray-500 prose-li:mb-2
                         ">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {question.desc}
                         </ReactMarkdown>
                     </div>
 
-                    {/* --- TEXT-BASED EXAMPLES (Integrated Flow) --- */}
+                    {/* Examples */}
                     <div className="mt-8 space-y-6">
-                        {(question.examples && question.examples.length > 0 ? question.examples : question.testCases?.slice(0, 3).map(tc => ({
-                            input: JSON.stringify(tc.input),
-                            output: JSON.stringify(tc.output),
-                            explanation: null
-                        })))?.map((ex: any, i: number) => (
+                        {question.testCases?.slice(0, 3).map((tc, i) => (
                             <div key={i}>
-                                <div className="font-medium text-white mb-2">Example {i + 1}:</div>
-                                <div className="ml-4 space-y-2 text-sm leading-relaxed">
-                                    <div className="flex gap-2">
-                                        <span className="font-medium text-gray-400 min-w-[3.5rem]">Input:</span>
-                                        <span className="font-mono text-gray-200">{ex.input}</span>
+                                <h3 className="text-white font-bold text-base mb-3">Example {i + 1}:</h3>
+                                <div className="bg-[#282828] rounded-lg p-4 font-mono text-sm border-l-2 border-dark-600 shadow-sm transition-all hover:border-brand/50 hover:bg-[#2a2a2a]">
+                                    <div className="flex gap-3 mb-2">
+                                        <span className="text-gray-500 font-medium select-none min-w-[50px]">Input:</span>
+                                        <span className="text-gray-200">{JSON.stringify(tc.input)}</span>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <span className="font-medium text-gray-400 min-w-[3.5rem]">Output:</span>
-                                        <span className="font-mono text-gray-200">{ex.output}</span>
+                                    <div className="flex gap-3">
+                                        <span className="text-gray-500 font-medium select-none min-w-[50px]">Output:</span>
+                                        <span className="text-gray-200">{JSON.stringify(tc.output)}</span>
                                     </div>
-                                    {ex.explanation && (
-                                        <div className="flex gap-2">
-                                            <span className="font-medium text-gray-400 min-w-[3.5rem]">Expl:</span>
-                                            <span className="text-gray-300">{ex.explanation}</span>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    {/* --- CONSTRAINTS --- */}
+                    {/* Constraints */}
                     {question.constraints && (
-                        <div className="mt-10 pt-8 border-t border-white/5">
-                            <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">Constraints</h3>
+                        <div className="mt-8 pt-6 border-t border-dark-700">
+                            <h3 className="text-white font-bold text-base mb-4">Constraints:</h3>
                             <div className="prose prose-invert prose-sm max-w-none 
-                                     prose-li:text-gray-400 prose-li:marker:text-dark-600 prose-li:mb-1
-                                     prose-code:bg-white/5 prose-code:text-gray-300 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-[12px] prose-code:before:content-none prose-code:after:content-none
+                                     prose-li:text-gray-300 prose-li:marker:text-gray-500 prose-li:mb-1
+                                     prose-code:bg-[#282828] prose-code:text-[#e6e6e6] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-sm prose-code:font-mono prose-code:text-[13px] prose-code:before:content-none prose-code:after:content-none
                                 ">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {question.constraints}
@@ -291,7 +304,7 @@ export function CodePlayer({ question }: CodePlayerProps) {
                 </div>
 
                 {/* Code Editor (Right Panel) */}
-                <div className="flex-1 flex flex-col bg-[#0f0f0f] relative overflow-hidden">
+                <div ref={consolePanelRef} className="flex-1 flex flex-col bg-[#0f0f0f] relative overflow-hidden">
 
                     {/* Language Selector Overlay */}
                     <div className="absolute top-2 right-2 z-10 flex gap-2">
@@ -330,9 +343,20 @@ export function CodePlayer({ question }: CodePlayerProps) {
                     <div
                         className={cn(
                             "absolute bottom-0 left-0 right-0 z-30 bg-[#1a1a1a] transition-all duration-300 flex flex-col border-t border-dark-600 shadow-[0_-8px_30px_rgba(0,0,0,0.8)]",
-                            consoleOpen ? "translate-y-0 h-[300px]" : "translate-y-full h-0"
+                            consoleOpen ? "translate-y-0" : "translate-y-full"
                         )}
+                        style={{ height: consoleOpen ? `${consoleHeight}px` : 0 }}
                     >
+                        {/* Resize Handle */}
+                        <div
+                            className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize hover:bg-brand/50 transition-colors z-40 group"
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                setIsConsoleDragging(true);
+                            }}
+                        >
+                            <div className="w-12 h-1 bg-gray-600 group-hover:bg-brand rounded-full mx-auto mt-0.5" />
+                        </div>
                         {/* Header Controls */}
                         <div className="flex items-center justify-between px-4 py-2 bg-[#262626] border-b border-white/5">
                             <div className="flex items-center gap-6">

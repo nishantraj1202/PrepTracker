@@ -20,6 +20,77 @@ app.use(cors());
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 
+// Helper function to parse test case input/output from AI extraction
+function parseTestCase(tc) {
+    if (!tc) return tc;
+
+    const parsed = { ...tc };
+
+    // Parse input field
+    if (typeof tc.input === 'string') {
+        let inputStr = tc.input.trim();
+
+        // Remove variable names like "nums = ", "target = ", "root = ", etc.
+        inputStr = inputStr.replace(/\w+\s*=\s*/g, '');
+
+        // Split by comma, but preserve commas inside brackets
+        const parts = [];
+        let current = '';
+        let depth = 0;
+
+        for (let i = 0; i < inputStr.length; i++) {
+            const char = inputStr[i];
+            if (char === '[') depth++;
+            if (char === ']') depth--;
+
+            if (char === ',' && depth === 0) {
+                parts.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        if (current.trim()) parts.push(current.trim());
+
+        // Parse each part
+        parsed.input = parts.map(part => {
+            try {
+                // Try to parse as JSON
+                return JSON.parse(part);
+            } catch {
+                // If it's a plain value (not parseable), try to infer type
+                if (part === 'null') return null;
+                if (part === 'true') return true;
+                if (part === 'false') return false;
+                if (!isNaN(part)) return Number(part);
+                // Remove quotes if it's a string
+                return part.replace(/^["']|["']$/g, '');
+            }
+        });
+    }
+
+    // Parse output field
+    if (typeof tc.output === 'string') {
+        let outputStr = tc.output.trim();
+
+        // Remove variable names if any
+        outputStr = outputStr.replace(/\w+\s*=\s*/g, '');
+
+        try {
+            parsed.output = JSON.parse(outputStr);
+        } catch {
+            // If it's a plain value
+            if (outputStr === 'null') parsed.output = null;
+            else if (outputStr === 'true') parsed.output = true;
+            else if (outputStr === 'false') parsed.output = false;
+            else if (!isNaN(outputStr)) parsed.output = Number(outputStr);
+            else parsed.output = outputStr.replace(/^["']|["']$/g, '');
+        }
+    }
+
+    return parsed;
+}
+
 // Initialize Groq
 const Groq = require('groq-sdk');
 let groq = null;
@@ -129,7 +200,13 @@ app.post('/api/admin/extract/image', async (req, res) => {
                         if (!mergedJson.company && json.company) mergedJson.company = json.company;
                         if (!mergedJson.topic && json.topic) mergedJson.topic = Array.isArray(json.topic) ? json.topic[0] : json.topic;
                         if (!mergedJson.difficulty && json.difficulty) mergedJson.difficulty = json.difficulty;
-                        if (json.testCases && Array.isArray(json.testCases)) mergedJson.testCases = [...mergedJson.testCases, ...json.testCases];
+
+                        // Parse and merge test cases
+                        if (json.testCases && Array.isArray(json.testCases)) {
+                            const parsedTestCases = json.testCases.map(parseTestCase);
+                            mergedJson.testCases = [...mergedJson.testCases, ...parsedTestCases];
+                        }
+
                         if (json.snippets) mergedJson.snippets = { ...mergedJson.snippets, ...json.snippets };
                     }
                     success = true; // Succeeded
@@ -601,7 +678,9 @@ function generateCppDriver(userCode, testCases) {
     `;
 
     testCases.forEach((tc, idx) => {
-        const args = tc.input.map(arg => {
+        // Ensure input is an array
+        const inputs = Array.isArray(tc.input) ? tc.input : [tc.input];
+        const args = inputs.map(arg => {
             if (Array.isArray(arg)) return `vector<int>${toCppLiteral(arg)}`;
             return toCppLiteral(arg);
         }).join(", ");
@@ -786,7 +865,9 @@ function generateJavaDriver(userCode, testCases) {
     `;
 
     testCases.forEach((tc, idx) => {
-        const args = tc.input.map(toJavaLiteral).join(", ");
+        // Ensure input is an array
+        const inputs = Array.isArray(tc.input) ? tc.input : [tc.input];
+        const args = inputs.map(toJavaLiteral).join(", ");
 
         // Handle Custom Input (null output)
         if (tc.output === null) {
@@ -1027,7 +1108,9 @@ app.post('/api/execute', async (req, res) => {
 
             testCases.forEach((tc, idx) => {
                 // Format args for JS call
-                const args = tc.input.map(arg => JSON.stringify(arg)).join(", ");
+                // Ensure input is an array
+                const inputs = Array.isArray(tc.input) ? tc.input : [tc.input];
+                const args = inputs.map(arg => JSON.stringify(arg)).join(", ");
 
                 // Custom Run (output is null)
                 if (tc.output === null) {
